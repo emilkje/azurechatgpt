@@ -39,11 +39,7 @@ const LoadFile = async (formData: FormData) => {
   const file: File | null = formData.get("file") as unknown as File;
   const chatThreadId: string = formData.get("id") as unknown as string;
 
-  if (
-    file &&
-    file.type === "application/pdf" &&
-    file.size < MAX_DOCUMENT_SIZE
-  ) {
+  if (file && file.size < MAX_DOCUMENT_SIZE) {
     const client = initDocumentIntelligence();
 
     const blob = new Blob([file], { type: file.type });
@@ -77,13 +73,10 @@ const LoadFile = async (formData: FormData) => {
 };
 
 const SplitDocuments = async (docs: Array<Document>) => {
-  const splitDocuments: Array<Document> = [];
-  for (const doc of docs) {
-    const splitter = new RecursiveCharacterTextSplitter();
-    const output = await splitter.createDocuments([doc.pageContent]);
-    splitDocuments.push(...output);
-  }
-  return splitDocuments;
+  const allContent = docs.map((doc) => doc.pageContent).join("\n");
+  const splitter = new RecursiveCharacterTextSplitter();
+  const output = await splitter.createDocuments([allContent]);
+  return output;
 };
 
 const IndexDocuments = async (
