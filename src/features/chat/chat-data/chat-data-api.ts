@@ -79,8 +79,11 @@ const findRelevantDocuments = async (query: string, chatThreadId: string) => {
 };
 
 const defineSystemPrompt = () => {
-  const system_combine_template = `Given the following context and a question, create a final answer. 
-  If the context is empty or If you don't know the answer, politely decline to answer the question. Don't try to make up an answer.
+  const system_combine_template = `Given the following context and a question, create a final answer. Please follow these rules:
+
+  1 If the context is empty or If you don't know the answer, politely decline to answer the question. 
+  2. Don't try to make up an answer.
+  3. Respond in the same language as the user.
   ----------------
   context: {summaries}`;
 
@@ -95,7 +98,8 @@ const defineSystemPrompt = () => {
 };
 
 const initVectorStore = () => {
-  const embedding = new OpenAIEmbeddings();
+  const deploymentName = process.env.AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME;
+  const embedding = new OpenAIEmbeddings({azureOpenAIApiEmbeddingsDeploymentName: deploymentName});
   const azureSearch = new AzureCogSearch<FaqDocumentIndex>(embedding, {
     name: process.env.AZURE_SEARCH_NAME,
     indexName: process.env.AZURE_SEARCH_INDEX_NAME,

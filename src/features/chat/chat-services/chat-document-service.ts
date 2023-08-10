@@ -20,11 +20,19 @@ import {
 const MAX_DOCUMENT_SIZE = 20000000;
 
 export const UploadDocument = async (formData: FormData) => {
-  const { docs, file, chatThreadId } = await LoadFile(formData);
-  const splitDocuments = await SplitDocuments(docs);
-  const docPageContents = splitDocuments.map((item) => item.pageContent);
-  await IndexDocuments(file, docPageContents, chatThreadId);
-  return file.name;
+  try {
+    console.log("loading file")
+    const { docs, file, chatThreadId } = await LoadFile(formData);
+    const splitDocuments = await SplitDocuments(docs);
+    console.log("file split into", splitDocuments.length, "documents");
+    const docPageContents = splitDocuments.map((item) => item.pageContent);
+    console.log("indexing documents");
+    await IndexDocuments(file, docPageContents, chatThreadId);
+    return file.name;
+  } catch(error) {
+    console.error(error);
+    throw error;
+  }
 };
 
 const LoadFile = async (formData: FormData) => {
@@ -83,36 +91,44 @@ const IndexDocuments = async (
   docs: string[],
   chatThreadId: string
 ) => {
-  const vectorStore = initAzureSearchVectorStore();
-  const documentsToIndex: FaqDocumentIndex[] = [];
-  let index = 0;
-  for (const doc of docs) {
-    const docToAdd: FaqDocumentIndex = {
-      id: nanoid(),
-      chatThreadId,
-      user: await userHashedId(),
-      pageContent: doc,
-      metadata: file.name,
-      embedding: [],
-    };
-
-    documentsToIndex.push(docToAdd);
-    index++;
+  try {
+    const vectorStore = initAzureSearchVectorStore();
+    const documentsToIndex: FaqDocumentIndex[] = [];
+    let index = 0;
+    for (const doc of docs) {
+      const docToAdd: FaqDocumentIndex = {
+        id: nanoid().replace(/^_/, 'a'), // leading underscores causes issues with cognitive serices
+        chatThreadId,
+        user: await userHashedId(),
+        pageContent: doc,
+        metadata: file.name,
+        embedding: [],
+      };
+  
+      documentsToIndex.push(docToAdd);
+      index++;
+    }
+  
+    await vectorStore.addDocuments(documentsToIndex);
+    await UpsertChatDocument(file.name, chatThreadId);
+  } catch(error) {
+    console.error(error);
+    throw error;
   }
-
-  await vectorStore.addDocuments(documentsToIndex);
-  await UpsertChatDocument(file.name, chatThreadId);
 };
 
 export const initAzureSearchVectorStore = () => {
-  const embedding = new OpenAIEmbeddings();
-  const azureSearch = new AzureCogSearch<FaqDocumentIndex>(embedding, {
+  const deploymentName = process.env.AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME;
+  const embedding = new OpenAIEmbeddings({azureOpenAIApiEmbeddingsDeploymentName: deploymentName});
+  const options = {
     name: process.env.AZURE_SEARCH_NAME,
     indexName: process.env.AZURE_SEARCH_INDEX_NAME,
     apiKey: process.env.AZURE_SEARCH_API_KEY,
     apiVersion: process.env.AZURE_SEARCH_API_VERSION,
     vectorFieldName: "embedding",
-  });
+  };
+  console.log(JSON.stringify(options, null, 2));
+  const azureSearch = new AzureCogSearch<FaqDocumentIndex>(embedding, options);
 
   return azureSearch;
 };
